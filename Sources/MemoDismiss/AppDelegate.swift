@@ -15,6 +15,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, MemoWatcherDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        requestAccessibilityIfNeeded()
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.title = "M"
@@ -60,6 +62,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, MemoWatcherDelegate {
     func memoWatcherDidDismiss() {
         dismissCount += 1
         statusMenuItem.title = "Memo: running (dismissed \(dismissCount)x)"
+    }
+
+    // MARK: - Accessibility
+
+    private func requestAccessibilityIfNeeded() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
     }
 
     // MARK: - Launch at Login

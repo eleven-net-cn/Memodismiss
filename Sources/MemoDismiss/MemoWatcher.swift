@@ -11,6 +11,7 @@ class MemoWatcher {
     weak var delegate: MemoWatcherDelegate?
     private var observedPid: pid_t = 0
     private var observer: AXObserver?
+    private var appRef: AXUIElement?
     private(set) var isAttached: Bool = false
 
     func start() {
@@ -43,7 +44,8 @@ class MemoWatcher {
     private func attach(pid: pid_t) {
         detach()
         observedPid = pid
-        let appRef = AXUIElementCreateApplication(pid)
+        let app = AXUIElementCreateApplication(pid)
+        self.appRef = app
 
         var obs: AXObserver?
         let selfPtr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
@@ -56,13 +58,27 @@ class MemoWatcher {
         guard err == .success, let observer = obs else { return }
         self.observer = observer
 
-        AXObserverAddNotification(observer, appRef, kAXWindowCreatedNotification as CFString, selfPtr)
+        let notifications: [String] = [
+            kAXWindowCreatedNotification as String,
+            kAXFocusedWindowChangedNotification as String,
+            kAXMainWindowChangedNotification as String,
+        ]
+        for n in notifications {
+            AXObserverAddNotification(observer, app, n as CFString, selfPtr)
+        }
         CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
 
         isAttached = true
         delegate?.memoWatcherDidAttach()
 
-        checkAndDismiss(appRef: appRef)
+        // Memo's AX windows are not ready immediately after launch.
+        // Retry several times over the first 15 seconds.
+        checkAndDismiss()
+        for delay in [1.0, 3.0, 5.0, 8.0, 12.0, 15.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.checkAndDismiss()
+            }
+        }
     }
 
     private func detach() {
@@ -70,6 +86,7 @@ class MemoWatcher {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
             self.observer = nil
         }
+        appRef = nil
         observedPid = 0
         if isAttached {
             isAttached = false
@@ -78,11 +95,11 @@ class MemoWatcher {
     }
 
     private func handleNotification(element: AXUIElement, notification: String) {
+        // No delay — dismiss as fast as possible to avoid visual flash
         if notification == kAXWindowCreatedNotification as String {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.dismissIfPremium(window: element)
-            }
+            dismissIfPremium(window: element)
         }
+        checkAndDismiss()
     }
 
     private func dismissIfPremium(window: AXUIElement) {
@@ -90,27 +107,53 @@ class MemoWatcher {
         AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleValue)
         guard let title = titleValue as? String, title == "Airmail Pro" else { return }
 
-        var children: AnyObject?
-        AXUIElementCopyAttributeValue(window, kAXChildrenAttribute as CFString, &children)
-        guard let elements = children as? [AXUIElement] else { return }
+        // Move window off-screen immediately to prevent visual flash
+        var offScreen = CGPoint(x: -10000, y: -10000)
+        let posValue = AXValueCreate(.cgPoint, &offScreen)!
+        AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
 
-        for element in elements {
-            var subrole: AnyObject?
-            AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
-            if let sr = subrole as? String, sr == "AXCloseButton" {
-                AXUIElementPerformAction(element, kAXPressAction as CFString)
-                delegate?.memoWatcherDidDismiss()
-                return
-            }
+        if let closeButton = findCloseButton(in: window) {
+            AXUIElementPerformAction(closeButton, kAXPressAction as CFString)
+            delegate?.memoWatcherDidDismiss()
         }
     }
 
-    private func checkAndDismiss(appRef: AXUIElement) {
-        var windowsValue: AnyObject?
-        AXUIElementCopyAttributeValue(appRef, kAXWindowsAttribute as CFString, &windowsValue)
-        guard let windows = windowsValue as? [AXUIElement] else { return }
-        for w in windows {
-            dismissIfPremium(window: w)
+    private func findCloseButton(in element: AXUIElement, depth: Int = 0) -> AXUIElement? {
+        guard depth < 5 else { return nil }
+
+        var children: AnyObject?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
+        guard let elements = children as? [AXUIElement] else { return nil }
+
+        for child in elements {
+            var subrole: AnyObject?
+            AXUIElementCopyAttributeValue(child, kAXSubroleAttribute as CFString, &subrole)
+            if let sr = subrole as? String, sr == "AXCloseButton" {
+                return child
+            }
+            if let found = findCloseButton(in: child, depth: depth + 1) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private func checkAndDismiss() {
+        guard let app = self.appRef else { return }
+
+        for attr in [kAXFocusedWindowAttribute, kAXMainWindowAttribute] as [String] {
+            var windowValue: AnyObject?
+            if AXUIElementCopyAttributeValue(app, attr as CFString, &windowValue) == .success {
+                dismissIfPremium(window: windowValue as! AXUIElement)
+            }
+        }
+
+        var listValue: AnyObject?
+        if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &listValue) == .success,
+           let windows = listValue as? [AXUIElement] {
+            for w in windows {
+                dismissIfPremium(window: w)
+            }
         }
     }
 }
