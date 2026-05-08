@@ -21,10 +21,37 @@ class MemoWatcher {
         ws.notificationCenter.addObserver(self, selector: #selector(appTerminated(_:)),
             name: NSWorkspace.didTerminateApplicationNotification, object: nil)
 
+        // Wake / unlock: AX events fired while the process was throttled
+        // during sleep/lock can be dropped, so re-scan whenever the system
+        // resumes activity.
+        let wakeNames: [NSNotification.Name] = [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification,
+            NSWorkspace.sessionDidBecomeActiveNotification,
+        ]
+        for n in wakeNames {
+            ws.notificationCenter.addObserver(self, selector: #selector(systemDidResume(_:)),
+                name: n, object: nil)
+        }
+        DistributedNotificationCenter.default().addObserver(self,
+            selector: #selector(systemDidResume(_:)),
+            name: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil)
+
         for app in ws.runningApplications {
             if app.bundleIdentifier == "com.nebula.memo" {
                 attach(pid: app.processIdentifier)
                 break
+            }
+        }
+    }
+
+    @objc private func systemDidResume(_ note: Notification) {
+        guard isAttached else { return }
+        checkAndDismiss()
+        // Memo may show the paywall asynchronously after wake; retry briefly.
+        for delay in [0.3, 1.0, 2.0, 4.0, 8.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.checkAndDismiss()
             }
         }
     }
