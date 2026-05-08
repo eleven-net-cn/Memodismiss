@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build universal binary
         run: make
@@ -21,13 +21,30 @@ jobs:
           file build/MemoDismiss.app/Contents/MacOS/MemoDismiss
           test -f build/MemoDismiss.app/Contents/Info.plist
 
+      - name: Install create-dmg
+        run: brew install create-dmg
+
       - name: Package
         run: |
+          VERSION="${GITHUB_REF_NAME}"
           cd build
-          zip -r MemoDismiss.app.zip MemoDismiss.app
+          zip -r "MemoDismiss-${VERSION}.zip" MemoDismiss.app
+          create-dmg \
+            --volname "MemoDismiss ${VERSION}" \
+            --window-pos 200 120 \
+            --window-size 600 380 \
+            --icon-size 100 \
+            --icon "MemoDismiss.app" 150 180 \
+            --hide-extension "MemoDismiss.app" \
+            --app-drop-link 450 180 \
+            --no-internet-enable \
+            "MemoDismiss-${VERSION}.dmg" \
+            "MemoDismiss.app"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          files: build/MemoDismiss.app.zip
+          files: |
+            build/MemoDismiss-*.dmg
+            build/MemoDismiss-*.zip
           generate_release_notes: true

@@ -22,7 +22,7 @@ Zero CPU usage when idle. No polling.
 
 ### Option 1: Download from Releases
 
-Download `MemoDismiss.app` from [Releases](../../releases), move it to `/Applications`, and open it.
+Download the latest **`MemoDismiss-vX.Y.Z.dmg`** from [Releases](../../releases), open it, and drag **MemoDismiss** onto the **Applications** shortcut. A `.zip` is also published for users who prefer it.
 
 ### Option 2: Build from source
 
@@ -54,7 +54,7 @@ MemoDismiss is distributed with an ad-hoc signature (no paid Apple Developer cer
 Upgrade steps:
 
 1. Quit MemoDismiss (menu bar **M** → **Quit**).
-2. Replace `/Applications/MemoDismiss.app` with the new version (re-run `make install`, or drag the new `.app` from the Releases download over the old one).
+2. Replace `/Applications/MemoDismiss.app` with the new version (re-run `make install`, drag the new `.app` from the mounted DMG over the old one, or unzip the published `.zip` and replace it).
 3. Open **System Settings → Privacy & Security → Accessibility**.
 4. Find **MemoDismiss** in the list and remove it with the **−** button. If two entries appear, remove both.
 5. Launch the new `/Applications/MemoDismiss.app`. macOS will prompt for Accessibility access — click **Open System Settings** and toggle **MemoDismiss** on.
