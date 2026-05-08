@@ -45,6 +45,23 @@ After launching, a **M** icon appears in the menu bar with:
 
 On first launch, macOS will prompt you to grant Accessibility permission. The app cannot function without it.
 
+## Updating to a new version
+
+> **Important:** You must re-grant Accessibility permission every time you install a new release.
+
+MemoDismiss is distributed with an ad-hoc signature (no paid Apple Developer certificate), so macOS treats every new build as a different app even though the name and bundle id stay the same. Your old authorization is tied to the previous build's code hash, not to the new one.
+
+Upgrade steps:
+
+1. Quit MemoDismiss (menu bar **M** → **Quit**).
+2. Replace `/Applications/MemoDismiss.app` with the new version (re-run `make install`, or drag the new `.app` from the Releases download over the old one).
+3. Open **System Settings → Privacy & Security → Accessibility**.
+4. Find **MemoDismiss** in the list and remove it with the **−** button. If two entries appear, remove both.
+5. Launch the new `/Applications/MemoDismiss.app`. macOS will prompt for Accessibility access — click **Open System Settings** and toggle **MemoDismiss** on.
+6. Confirm the menu bar status changes from "Memo: not running" to "Memo: running (watching)" once Memo is open.
+
+If the popup still appears after the upgrade, permission did not transfer — repeat step 4 to make sure the stale entry is gone.
+
 ## Uninstall
 
 ```bash
